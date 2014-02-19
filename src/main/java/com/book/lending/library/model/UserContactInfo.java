@@ -3,8 +3,6 @@ package com.book.lending.library.model;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.validation.constraints.NotNull;
-
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
@@ -21,7 +19,6 @@ public class UserContactInfo {
 	private String  id;
 	
 	@Indexed(unique = true)
-	@NotNull
 	private String userContactEmailID;
 	@Indexed(unique = true)
 	private String userContactPhone;

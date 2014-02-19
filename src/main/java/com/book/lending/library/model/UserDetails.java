@@ -1,7 +1,5 @@
 package com.book.lending.library.model;
 
-import javax.validation.constraints.NotNull;
-
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -12,15 +10,11 @@ public class UserDetails {
 	private String id;
 	// randon number for our reference
 	@Indexed(unique=true)
-	@NotNull
 	private String userId;
-	@NotNull
     private String firstName;
     @Indexed
-    @NotNull
     private String lastName;
     @Indexed
-    @NotNull
     private String dob;
     private UserContactInfo userContact;
 	

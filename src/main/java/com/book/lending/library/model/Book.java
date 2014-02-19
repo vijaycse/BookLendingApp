@@ -3,8 +3,6 @@ package com.book.lending.library.model;
 
 import java.util.List;
 
-import javax.validation.constraints.NotNull;
-
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -17,10 +15,8 @@ public class Book {
 
 
 	@Indexed
-	@NotNull
 	private String bookName;
 	@Indexed(unique=true)
-	@NotNull
 	private String serialNumber;
 	private String author;
 	private String title;
