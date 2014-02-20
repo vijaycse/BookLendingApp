@@ -27,18 +27,18 @@ import com.book.lending.library.model.UserDetails;
 @Repository(value="bookServiceRepository")
 @Transactional
 public class BookServiceImpl implements BookService {
-	
+
 	public static final String USER_COLLECTION_NAME = "userdetails";
 	public static final String BOOK_COLLECTION_NAME = "bookdetails";
 	private static final Logger logger = Logger.getLogger("BookBasicService");
-	
-	 @Autowired
-	 private UserSevice personService;
+
+	@Autowired
+	private UserSevice personService;
 
 	@Resource(name = "mongoTemplate")
 	private MongoTemplate mongoTemplate;
 
-	
+
 	/**
 	 * Retrieves all books
 	 */
@@ -59,7 +59,7 @@ public class BookServiceImpl implements BookService {
 		logger.debug("Retrieving all users");
 		return mongoTemplate.findAll(User.class);
 	}
-	
+
 	/**
 	 * 
 	 * @return all books;
@@ -68,16 +68,21 @@ public class BookServiceImpl implements BookService {
 		logger.debug("Retrieving all books");
 		return  mongoTemplate.findAll(BookDetails.class,BOOK_COLLECTION_NAME);
 	}
-	
+
 	public BookDetails getBookById(final String serialNumber) throws BookLendingException{
 		logger.debug("fetching the book detail by Id");
-		Query query = new Query(where("serialNumber").is(serialNumber));
-		List<BookDetails> bookDetails =  mongoTemplate.find(query, BookDetails.class);
-		if(null!=bookDetails && bookDetails.size() > 0) return bookDetails.get(0);
-		else throw new BookLendingException("1003 ", "Book not found " + serialNumber);
-		
+		if(!StringUtils.isEmpty(serialNumber)){
+			Query query = new Query(where("serialNumber").is(serialNumber));
+			List<BookDetails> bookDetails =  mongoTemplate.find(query, BookDetails.class);
+			if(null!=bookDetails && bookDetails.size() > 0) return bookDetails.get(0);
+			else throw new BookLendingException("1003 ", "Book not found " + serialNumber);
+		}
+		else{
+			throw new BookLendingException("1003 ", "Serial Number is invalid ");
+		}
+
 	}
-	
+
 	/**
 	 * 
 	 * @param bookName
@@ -90,11 +95,16 @@ public class BookServiceImpl implements BookService {
 	public List<BookDetails> getBook(final String author,
 			final String title, final String keywords) throws BookLendingException {
 		logger.debug("retrieving books with filters");
-		Criteria filterCriteria = buildBookDetailCriteria(author, title);
-		return mongoTemplate.find(new Query(filterCriteria), BookDetails.class);
+		if(!StringUtils.isEmpty(author) || !StringUtils.isEmpty(title)){
+			Criteria filterCriteria = buildBookDetailCriteria(author, title);
+			return mongoTemplate.find(new Query(filterCriteria), BookDetails.class);
+		}
+		else{
+			throw new BookLendingException("1101 ", "Invalid data passed");
+		}
 	}
-	
-	
+
+
 	/**
 	 * 
 	 * @param author
@@ -155,8 +165,8 @@ public class BookServiceImpl implements BookService {
 		return new Criteria(criteriaBuilder.toString());
 
 	}
-	
-	
+
+
 	/**
 	 *  Get Book details along with the user
 	 * @param bookName
@@ -164,11 +174,17 @@ public class BookServiceImpl implements BookService {
 	 * @param title
 	 * @param keyWords
 	 * @return
+	 * @throws BookLendingException 
 	 */
 	public List<BookDetails> getBookWithUser(
-			final String author, final String title, final String keywords) {
-		Query searchBookQuery = new Query(buildBookFilterSearch(author, title, keywords));
-		return mongoTemplate.find(searchBookQuery, BookDetails.class);
+			final String author, final String title, final String keywords) throws BookLendingException {
+		if(StringUtils.isEmpty(author) ||  !StringUtils.isEmpty(title) || !StringUtils.isEmpty(keywords)){
+			Query searchBookQuery = new Query(buildBookFilterSearch(author, title, keywords));
+			return mongoTemplate.find(searchBookQuery, BookDetails.class);
+		}
+		else{
+			throw new BookLendingException("1101 ", "invalid data ");
+		}
 	}
 
 	/**
@@ -180,7 +196,7 @@ public class BookServiceImpl implements BookService {
 	 * @throws BookLendingException 
 	 */
 	// TODO: transactional rollback effect.  refactor the code...
-	private boolean addBook(Book book, User user) throws BookLendingException {
+	private boolean addBook(final Book book,final  User user) throws BookLendingException {
 		logger.debug("Adding a new book " + book.getBookName());
 		try {
 			if (null != user && null != book) {
@@ -195,48 +211,17 @@ public class BookServiceImpl implements BookService {
 		}
 	}
 
-	
-	
+
+
 	/**
 	 * 
 	 */
-	public boolean updateBookDetails(BookDetails book) throws BookLendingException {
+	public final boolean updateBookDetails(final BookDetails book) throws BookLendingException {
 		logger.debug("updating a new book" + book.getBookName() + "with id " +  book.getSerialNumber());
 		try{ 
 			BookDetails existingBookDetails = getBookById(book.getSerialNumber());
 			if(null!=existingBookDetails){
-				// update the user
-				int userDetailsSize = book.getUserDetails().size();
-				if(userDetailsSize > 1){
-					logger.error("updating a new book" + book.getBookName() + "with id " +  book.getSerialNumber() + " invalid request");
-					//throw exception
-				}
-				else if(userDetailsSize == 1){
-					UserDetails userFound = personService.findUser(book.getUserDetails().get(0));
-					if(null!=userFound){
-						/// see if the user is already present in the book collection
-						if(existingBookDetails.getUserDetails().contains(userFound)){
-							logger.debug("updating a new book" + book.getBookName() + "with id " +  book.getSerialNumber() + " updating a user");
-							mongoTemplate.save(book, BOOK_COLLECTION_NAME);
-						}
-						else{
-							// add the user to the book details
-							logger.debug("updating a new book" + book.getBookName() + "with id " +  book.getSerialNumber() + " adding a user");
-							List<UserDetails> existingUserDetails = existingBookDetails.getUserDetails();
-							logger.debug("existing user details from the book " + existingUserDetails.size());
-							existingUserDetails.add(book.getUserDetails().get(0));
-							book.setUserDetails(existingUserDetails);
-							mongoTemplate.save(book, BOOK_COLLECTION_NAME);
-						}
-					}
-					else{
-						// user is not found
-						logger.error("updating a new book" + book.getBookName() + "with id " +  book.getSerialNumber() + "user is not found");
-					}
-
-				}else{
-					logger.error("updating a new book" + book.getBookName() + "with id " +  book.getSerialNumber() + " invalid request");
-				}
+				processExistingBookDetails(book,existingBookDetails);
 			}
 			else{
 				//add a new book
@@ -248,7 +233,55 @@ public class BookServiceImpl implements BookService {
 			throw new BookLendingException("1007", "Error updating the book");
 		}
 	}
+
 	
+	private void processExistingBookDetails(BookDetails book, BookDetails existingBookDetails) throws BookLendingException{
+		// update the user
+		int userDetailsSize = book.getUserDetails().size();
+		if(userDetailsSize > 1){
+			logger.error("updating a new book" + book.getBookName() + "with id " +  book.getSerialNumber() + " invalid request");
+			throw new BookLendingException("1008", "Error updating the book");
+		}
+		else if(userDetailsSize == 1){
+			processUserFound(book,existingBookDetails);
+
+		}else{
+			logger.error("updating a new book" + book.getBookName() + "with id " +  book.getSerialNumber() + " invalid request");
+			throw new BookLendingException("1008", "Error updating the book");
+		}
+
+	}
+
+	private void processUserFound(BookDetails book, BookDetails existingBookDetails) throws BookLendingException{
+		UserDetails userFound = personService.findUser(book.getUserDetails().get(0));
+		if(null!=userFound){
+			saveUser(userFound, book, existingBookDetails);
+		}
+		else{
+			// user is not found
+			logger.error("updating a new book" + book.getBookName() + "with id " +  book.getSerialNumber() + "user is not found");
+			throw new BookLendingException("1008", "Error updating the book" +"user is not found");
+		}
+	}
+
+	private void saveUser(UserDetails userFound, BookDetails book, BookDetails existingBookDetails){
+		/// see if the user is already present in the book collection
+		if(existingBookDetails.getUserDetails().contains(userFound)){
+			logger.debug("updating a new book" + book.getBookName() + "with id " +  book.getSerialNumber() + " updating a user");
+			mongoTemplate.save(book, BOOK_COLLECTION_NAME);
+		}
+		else{
+			// add the user to the book details
+			logger.debug("updating a new book" + book.getBookName() + "with id " +  book.getSerialNumber() + " adding a user");
+			List<UserDetails> existingUserDetails = existingBookDetails.getUserDetails();
+			logger.debug("existing user details from the book " + existingUserDetails.size());
+			existingUserDetails.add(book.getUserDetails().get(0));
+			book.setUserDetails(existingUserDetails);
+			mongoTemplate.save(book, BOOK_COLLECTION_NAME);
+		}
+
+	}
+
 	/**
 	 * * Adds a new book with user exist check
 	 * 
@@ -257,17 +290,17 @@ public class BookServiceImpl implements BookService {
 	 * @return
 	 * @throws BookLendingException 
 	 */
-	public boolean addBookWithBookDetails(BookDetails bookDetails) throws BookLendingException {
+	public final boolean addBookWithBookDetails(final BookDetails bookDetails) throws BookLendingException {
 		logger.debug("Adding a new book " + bookDetails.getBookName());
 		List<User> userInfo = bookDetails.getUser(bookDetails);
 		if(userInfo.size() > 0){
 			return addBook(bookDetails.getBook(bookDetails),userInfo.get(0));
-			}
+		}
 		else{
 			throw new BookLendingException("1005", "User info is null");
 		}
 	}
-	
+
 	/**
 	 * Inserting the books and user -> books
 	 * 
@@ -277,14 +310,14 @@ public class BookServiceImpl implements BookService {
 	 */
 	@SuppressWarnings("unused")
 	private boolean insertBook(Book book, User user) {
-	Query userSearch = new Query(where("userId").is(user.getUserId()));
+		Query userSearch = new Query(where("userId").is(user.getUserId()));
 		List<Book> updateBook = new ArrayList<Book>();
 		updateBook.add(book);
 		try {
 			User userTest = mongoTemplate.findAndModify(userSearch,
 					new Update().set("heldBooks", updateBook),
 					new FindAndModifyOptions().returnNew(true), User.class);
-			
+
 			return (null != userTest ? true : false);
 		} catch (Exception ex) {
 			logger.error("error in updating insertbooks " + book.getBookName()
@@ -292,19 +325,19 @@ public class BookServiceImpl implements BookService {
 			ex.printStackTrace();
 		}
 		return false;
-		
+
 		/*BookDetails tempBook = new BookDetails();
 		tempBook.setAuthor("Viay");
 		tempBook.setBookName("outlier");
 		tempBook.setCategory("");
 		tempBook.setSerialNumber("123333");
 		tempBook.setTitle("");
-		
+
 		UserDetails user1 = new UserDetails();
 		user.setDob("01/15/2010");
 		user.setFirstName("vijay");
 		user.setUserId("1333");
-	
+
 		List<UserDetails> userList = new ArrayList<UserDetails>();
 		userList.add(user1);
 		tempBook.setUserDetails(userList);
@@ -312,10 +345,10 @@ public class BookServiceImpl implements BookService {
 		//mongoTemplate.remove(tempBook, "bookdetails");
 		//mongoTemplate.dropCollection(UserDetails.class);
 		mongoTemplate.insert(tempBook, "bookdetails");
-		
+
 		return true;
-		*/
-		
+		 */
+
 	}
 
 	/**
@@ -326,7 +359,7 @@ public class BookServiceImpl implements BookService {
 	 * @return
 	 * @throws BookLendingException 
 	 */
-	private boolean insertBookDetails(Book book, User user) throws BookLendingException {
+	private boolean insertBookDetails(final Book book,final  User user) throws BookLendingException {
 		if (null != book && null != user) {
 			BookDetails bookDetails = new BookDetails();
 
@@ -371,20 +404,26 @@ public class BookServiceImpl implements BookService {
 		return false;
 
 	}
-	
+
 	/****
 	 * 
 	 */
 	@Override
-	public boolean deleteBookDetails(BookDetails book)
-			throws BookLendingException {
-		try{
-			mongoTemplate.remove(book, BOOK_COLLECTION_NAME);
-			return true;
-		}catch(Exception ex){
-			logger.error(" Error deleting a new book " + book.getBookName());
-			throw new BookLendingException("1007","Error Deleting Book Details");
+
+	public final boolean deleteBookDetails(BookDetails book) throws BookLendingException {
+		if(null!=book){
+			try{
+				mongoTemplate.remove(book, BOOK_COLLECTION_NAME);
+				return true;
+			}catch(Exception ex){
+				logger.error(" Error deleting a new book " + book.getBookName());
+				throw new BookLendingException("1007","Error Deleting Book Details");
+			}
+		}
+		else{
+			throw new BookLendingException("1101 ", "Invalid data" );
 		}
 	}
+
 
 }
